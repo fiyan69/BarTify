@@ -8,6 +8,30 @@ from ctypes import wintypes
 from typing import Optional, Tuple
 
 user32 = ctypes.windll.user32
+shell32 = ctypes.windll.shell32
+
+
+class APPBARDATA(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("hWnd", wintypes.HWND),
+        ("uCallbackMessage", wintypes.UINT),
+        ("uEdge", wintypes.UINT),
+        ("rc", wintypes.RECT),
+        ("lParam", wintypes.LPARAM),
+    ]
+
+
+def is_taskbar_autohide() -> bool:
+    """Checks if the Windows taskbar has 'Automatically hide the taskbar' enabled."""
+    try:
+        data = APPBARDATA()
+        data.cbSize = ctypes.sizeof(APPBARDATA)
+        # ABM_GETSTATE = 4; ABS_AUTOHIDE = 0x01
+        state = shell32.SHAppBarMessage(4, ctypes.byref(data))
+        return bool(state & 1)
+    except Exception:
+        return False
 
 
 def get_taskbar_rect() -> Optional[Tuple[int, int, int, int]]:

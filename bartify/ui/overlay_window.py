@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QFont, QPainter, QLinearGradient
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QFrame,
     QLabel,
     QProgressBar,
     QMenu,
@@ -15,7 +16,7 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from ..utils.windows_api import get_taskbar_rect, set_click_through
+from ..utils.windows_api import get_taskbar_rect, set_click_through, is_taskbar_autohide
 
 
 class KaraokeProgressBar(QProgressBar):
@@ -69,14 +70,29 @@ class TaskbarOverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 4, 16, 4)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # Translucent styled container frame
+        self.container = QFrame(self)
+        self.container.setObjectName("Container")
+        self.container.setStyleSheet("""
+            QFrame#Container {
+                background-color: rgba(20, 20, 20, 0.88);
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                border-radius: 12px;
+            }
+        """)
+
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(14, 5, 14, 5)
         layout.setSpacing(2)
 
         # Main active lyric label
-        self.lyric_label = QLabel("🎵 BarTify Ready", self)
+        self.lyric_label = QLabel("🎵 BarTify Ready", self.container)
         self.lyric_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = QFont("Segoe UI", 11, QFont.Weight.DemiBold)
+        font = QFont("Segoe UI", 10, QFont.Weight.DemiBold)
         self.lyric_label.setFont(font)
         self.lyric_label.setStyleSheet("""
             QLabel {
@@ -86,7 +102,7 @@ class TaskbarOverlayWindow(QWidget):
         """)
 
         # Next line preview label
-        self.next_label = QLabel("", self)
+        self.next_label = QLabel("", self.container)
         self.next_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         next_font = QFont("Segoe UI", 8, QFont.Weight.Normal)
         self.next_label.setFont(next_font)
@@ -98,34 +114,49 @@ class TaskbarOverlayWindow(QWidget):
         """)
 
         # Progress bar
-        self.progress_bar = KaraokeProgressBar(self)
+        self.progress_bar = KaraokeProgressBar(self.container)
 
         layout.addWidget(self.lyric_label)
         layout.addWidget(self.next_label)
         layout.addWidget(self.progress_bar)
 
-    def reposition_to_taskbar(self, width_padding: int = 400):
+        root_layout.addWidget(self.container)
+
+    def reposition_to_taskbar(self, width: int = 560, height: int = 48):
         """
-        Positions the overlay right on the taskbar.
-        Leaves horizontal padding so center taskbar icons or tray aren't completely obscured.
+        Positions the overlay cleanly above or on the taskbar using Qt logical coordinates.
+        Supports both auto-hide and standard Windows taskbars.
         """
-        rect = get_taskbar_rect()
-        if rect:
-            tb_x, tb_y, tb_w, tb_h = rect
-            # Position centered or docked nicely
-            overlay_w = max(400, tb_w - (width_padding * 2))
-            overlay_x = tb_x + (tb_w - overlay_w) // 2
-            overlay_y = tb_y + max(0, (tb_h - 44) // 2)
-            self.setGeometry(overlay_x, overlay_y, overlay_w, 44)
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+
+        s_geo = screen.geometry()
+        sw = s_geo.width()
+        sh = s_geo.height()
+
+        overlay_w = min(width, sw - 40)
+        overlay_h = height
+        overlay_x = (sw - overlay_w) // 2
+
+        if is_taskbar_autohide():
+            overlay_y = sh - overlay_h - 14
         else:
-            # Fallback to screen geometry
-            screen = QApplication.primaryScreen().geometry()
-            self.setGeometry(
-                screen.width() // 4,
-                screen.height() - 50,
-                screen.width() // 2,
-                44,
-            )
+            overlay_y = sh - 48 - overlay_h - 6
+
+        self.setGeometry(overlay_x, overlay_y, overlay_w, overlay_h)
+
+    def mousePressEvent(self, event):
+        """Allow dragging the overlay widget with left mouse button."""
+        if event.button() == Qt.MouseButton.LeftButton and not self._click_through:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        """Handle dragging position updates."""
+        if event.buttons() == Qt.MouseButton.LeftButton and hasattr(self, "_drag_pos") and not self._click_through:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
 
     def update_lyrics_display(
         self,

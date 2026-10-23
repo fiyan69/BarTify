@@ -130,6 +130,7 @@ class BarTifyApp(QObject):
                     self.current_track = track
 
                     if track_key != old_key:
+                        print(f"[Spotify] 🎵 Lagu terdeteksi: {track.artist} - {track.title}")
                         self._trigger_lyrics_fetch(track)
                 else:
                     self.current_track = None
@@ -165,7 +166,10 @@ class BarTifyApp(QObject):
 
     def _on_lyrics_loaded(self, lyrics: Optional[ParsedLyrics]):
         self.current_lyrics = lyrics
-        if not lyrics:
+        if lyrics:
+            print(f"[LRCLIB] [✓] Berhasil memuat lirik: {len(lyrics)} baris.")
+        else:
+            print("[LRCLIB] [!] Lirik tidak ditemukan di database.")
             if self.current_track:
                 self.overlay.update_lyrics_display(
                     f"🎵 {self.current_track.title}",
