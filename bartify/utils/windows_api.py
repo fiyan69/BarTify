@@ -126,3 +126,97 @@ def trim_process_memory():
     except Exception:
         pass
 
+
+def is_spotify_running() -> bool:
+    """Checks whether Spotify process (Spotify.exe) is currently active in Windows."""
+    TH32CS_SNAPPROCESS = 0x00000002
+    kernel32 = ctypes.windll.kernel32
+
+    class PROCESSENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_char * 260),
+        ]
+
+    hSnapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if hSnapshot == -1:
+        return False
+
+    pe = PROCESSENTRY32()
+    pe.dwSize = ctypes.sizeof(PROCESSENTRY32)
+
+    success = kernel32.Process32First(hSnapshot, ctypes.byref(pe))
+    running = False
+    while success:
+        name = pe.szExeFile.decode("utf-8", errors="ignore").lower()
+        if "spotify.exe" in name:
+            running = True
+            break
+        success = kernel32.Process32Next(hSnapshot, ctypes.byref(pe))
+
+    kernel32.CloseHandle(hSnapshot)
+    return running
+
+
+def set_windows_autostart(enable: bool) -> bool:
+    """Registers or unregisters BarTify in HKCU Run to auto-start with Windows in background."""
+    import sys
+    import os
+    import winreg
+
+    RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    APP_NAME = "BarTify"
+
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            RUN_KEY,
+            0,
+            winreg.KEY_SET_VALUE | winreg.KEY_READ,
+        )
+        if enable:
+            if getattr(sys, "frozen", False):
+                # Compiled executable (.exe)
+                cmd = f'"{sys.executable}" --minimized'
+            else:
+                # Python source
+                root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                main_py = os.path.join(root_dir, "main.py")
+                cmd = f'"{sys.executable}" "{main_py}" --minimized'
+            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
+        else:
+            try:
+                winreg.DeleteValue(key, APP_NAME)
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception:
+        return False
+
+
+def is_windows_autostart_enabled() -> bool:
+    """Checks whether BarTify is currently registered in Windows autorun."""
+    import winreg
+
+    RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    APP_NAME = "BarTify"
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ)
+        val, _ = winreg.QueryValueEx(key, APP_NAME)
+        winreg.CloseKey(key)
+        return bool(val)
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+

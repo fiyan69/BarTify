@@ -9,6 +9,46 @@ from PyQt6.QtWidgets import QApplication
 from bartify.app import BarTifyApp
 
 
+# Robust output stream wrapper preventing Windows CP1252 UnicodeEncodeError
+class SafeWriter:
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, s):
+        if self.stream is not None:
+            try:
+                self.stream.write(s)
+            except Exception:
+                try:
+                    self.stream.write(s.encode("ascii", errors="replace").decode("ascii"))
+                except Exception:
+                    pass
+
+    def flush(self):
+        if self.stream is not None:
+            try:
+                self.stream.flush()
+            except Exception:
+                pass
+
+
+if sys.stdout is not None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stdout = SafeWriter(sys.stdout)
+else:
+    sys.stdout = SafeWriter(None)
+
+if sys.stderr is not None:
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stderr = SafeWriter(sys.stderr)
+else:
+    sys.stderr = SafeWriter(None)
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -24,7 +64,8 @@ def main():
     app.setApplicationName("BarTify")
     app.setQuitOnLastWindowClosed(False)
 
-    bartify = BarTifyApp()
+    is_minimized = "--minimized" in sys.argv
+    bartify = BarTifyApp(start_minimized=is_minimized)
     bartify.start()
 
     print("[✓] BarTify aktif! Periksa taskbar atau tray icon kamu.")

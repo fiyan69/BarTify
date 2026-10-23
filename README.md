@@ -76,23 +76,28 @@ Unlike conventional lyric apps that require fragile web scraping, browser cookie
 
 ```text
 BarTify/
+├── assets/
+│   └── icon.ico                  # Application high-resolution icon
 ├── bartify/
 │   ├── core/
 │   │   ├── __init__.py
+│   │   ├── i18n.py               # Bilingual localization (English default & Indonesian)
 │   │   ├── media_listener.py     # WinRT GSMTC session polling & timeline interpolation
-│   │   ├── lyrics_client.py      # LRCLIB REST client with title normalization & caching
+│   │   ├── lyrics_client.py      # LRCLIB REST client with duration scoring & relaxed retry
 │   │   └── lrc_parser.py         # Pure-Python LRC parser and bisect synchronizer
 │   ├── ui/
 │   │   ├── __init__.py
-│   │   └── overlay_window.py     # Frameless, translucent PyQt6 taskbar overlay
+│   │   ├── overlay_window.py     # Taskbar overlay with Spotify-style cubic sliding animation
+│   │   └── settings_dialog.py    # Fluent/Spotify dark settings GUI with live canvas preview
 │   ├── utils/
 │   │   ├── __init__.py
-│   │   └── windows_api.py        # Win32 taskbar geometry detection & click-through
+│   │   └── windows_api.py        # Win32 taskbar geometry, autostart, & memory trimming
 │   ├── __init__.py
-│   ├── app.py                    # Main controller, event loop, and system tray
-│   └── config.py                 # Central configuration constants
+│   ├── app.py                    # Main controller, background poller, and system tray
+│   └── config.py                 # Central JSON configuration persistence
 ├── tests/
-│   └── test_lrc_parser.py        # Unit test suite for LRC synchronization logic
+│   └── test_lrc_parser.py        # Automated unit test suite
+├── build_exe.py                  # Single-file PyInstaller packaging automation
 ├── requirements.txt              # Production dependencies
 ├── LICENSE                       # MIT License
 ├── README.md                     # Documentation
@@ -101,25 +106,33 @@ BarTify/
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ Installation & Usage
 
-### Prerequisites
+### Option 1: Standalone Portable Executable (No Python Required)
+You can build a standalone, single-file Windows executable:
+```bash
+python build_exe.py
+```
+This produces `dist/BarTify.exe`. Simply double-click `BarTify.exe` to run it anywhere without requiring Python, VS Code, or terminal dependencies.
+
+### Option 2: Running from Source
+#### Prerequisites
 - **OS**: Windows 10 or Windows 11
 - **Python**: Python 3.12+
 - **Spotify**: Desktop client running and playing audio
 
-### 1. Clone the Repository
+#### 1. Clone the Repository
 ```bash
 git clone https://github.com/fiyan69/BarTify.git
 cd BarTify
 ```
 
-### 2. Install Dependencies
+#### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the Application
+#### 3. Run the Application
 ```bash
 python main.py
 ```
@@ -138,12 +151,12 @@ python -m unittest discover tests
 
 ## 🎮 Controls & Shortcuts
 
-- **Mouse Hover**: Moving your mouse over the overlay automatically fades it to 20% opacity so you can click taskbar icons underneath.
-- **Right Click**: Opens context menu to:
-  - 🔄 Reload Lyrics for current song
-  - ⏩ Offset +0.5s / ⏪ Offset -0.5s (adjust lyric timing)
-  - ❌ Exit BarTify
-- **System Tray**: Left-click or right-click the green Spotify note icon in your Windows notification tray to toggle visibility or center the overlay.
+- **Right Click on Taskbar Lyrics**: Opens quick menu:
+  - ⚙️ **Pengaturan**: Opens the Fluent-designed Settings dialog (live preview, font family, font size, bold toggle, color pickers, docking alignment, width, and offset tuning).
+  - 🔄 **Reset Lyric**: Force re-fetches the latest synchronized lyric from LRCLIB.
+  - ❌ **Exit**: Gracefully closes BarTify.
+- **Left Click Drag**: Drag the overlay along your taskbar to your preferred location.
+- **System Tray**: Left-click or right-click the green Spotify note icon in your Windows notification tray to toggle visibility, open settings, or dock to presets.
 
 ---
 

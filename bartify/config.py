@@ -25,9 +25,17 @@ class OverlayConfig:
 
 
 @dataclass
+class GeneralConfig:
+    language: str = "en"  # "en" (default), "id"
+    auto_start_with_spotify: bool = False
+    auto_hide_when_idle: bool = True
+
+
+@dataclass
 class AppConfig:
     target_media_app: str = "spotify"
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
+    general: GeneralConfig = field(default_factory=GeneralConfig)
 
 
 def load_config() -> AppConfig:
@@ -41,9 +49,15 @@ def load_config() -> AppConfig:
             overlay_data = data.get("overlay", {})
             valid_keys = OverlayConfig.__annotations__.keys()
             filtered_overlay = {k: v for k, v in overlay_data.items() if k in valid_keys}
+
+            general_data = data.get("general", {})
+            valid_gen_keys = GeneralConfig.__annotations__.keys()
+            filtered_gen = {k: v for k, v in general_data.items() if k in valid_gen_keys}
+
             return AppConfig(
                 target_media_app=data.get("target_media_app", "spotify"),
                 overlay=OverlayConfig(**filtered_overlay),
+                general=GeneralConfig(**filtered_gen),
             )
     except Exception:
         return AppConfig()

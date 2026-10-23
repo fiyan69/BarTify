@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..config import AppConfig, OverlayConfig, save_config
+from ..core.i18n import get_language, set_language, tr
 
 
 class TaskbarPreviewWidget(QWidget):
@@ -230,6 +231,12 @@ class SegmentedPillGroup(QWidget):
     def active_key(self) -> str:
         return self._active_key
 
+    def update_labels(self, options: List[Tuple[str, str]]):
+        self._options = options
+        for key, label in options:
+            if key in self._buttons:
+                self._buttons[key].setText(label)
+
     def _refresh_styles(self):
         for key, btn in self._buttons.items():
             if key == self._active_key:
@@ -323,11 +330,59 @@ class SliderWithBadge(QWidget):
         self._update_badge(val)
 
 
-class SettingRow(QFrame):
+class ToggleSwitch(QWidget):
+    """
+    Windows 11 / Fluent styled toggle switch (dongle).
+    Pill-shaped toggle with smooth Spotify green active state and crisp anti-aliased thumb.
+    """
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, checked: bool = False, parent=None):
+        super().__init__(parent)
+        self._checked = checked
+        self.setFixedSize(42, 22)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            self.update()
+            self.toggled.emit(self._checked)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._checked = not self._checked
+            self.update()
+            self.toggled.emit(self._checked)
+            event.accept()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Track background
+        bg_color = QColor("#1DB954") if self._checked else QColor("#28282E")
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(bg_color)
+        p.drawRoundedRect(0, 0, self.width(), self.height(), 11, 11)
+
+        # Thumb
+        thumb_x = self.width() - 19 if self._checked else 3
+        p.setBrush(QColor("#FFFFFF"))
+        p.drawEllipse(thumb_x, 3, 16, 16)
+        p.end()
+
+
+class SettingRow(QWidget):
     """Clean setting row with left-aligned title/desc and right-aligned control."""
 
-    def __init__(self, title: str, description: str = "", control: QWidget = None, parent=None):
+    def __init__(self, title_key: str, desc_key: str = "", control: QWidget = None, parent=None):
         super().__init__(parent)
+        self.title_key = title_key
+        self.desc_key = desc_key
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(12)
@@ -335,14 +390,15 @@ class SettingRow(QFrame):
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
 
-        lbl_title = QLabel(title, self)
-        lbl_title.setStyleSheet("color: #EEEEF0; font-size: 13px; font-weight: 500;")
-        text_layout.addWidget(lbl_title)
+        self.lbl_title = QLabel(tr(title_key) if title_key else "", self)
+        self.lbl_title.setStyleSheet("color: #EEEEF0; font-size: 13px; font-weight: 500;")
+        text_layout.addWidget(self.lbl_title)
 
-        if description:
-            lbl_desc = QLabel(description, self)
-            lbl_desc.setStyleSheet("color: #727278; font-size: 11px;")
-            text_layout.addWidget(lbl_desc)
+        self.lbl_desc = None
+        if desc_key:
+            self.lbl_desc = QLabel(tr(desc_key), self)
+            self.lbl_desc.setStyleSheet("color: #727278; font-size: 11px;")
+            text_layout.addWidget(self.lbl_desc)
 
         layout.addLayout(text_layout)
         layout.addStretch()
@@ -350,12 +406,20 @@ class SettingRow(QFrame):
         if control:
             layout.addWidget(control)
 
+    def retranslate(self):
+        if self.title_key:
+            self.lbl_title.setText(tr(self.title_key))
+        if self.desc_key and self.lbl_desc:
+            self.lbl_desc.setText(tr(self.desc_key))
+
 
 class SettingCard(QFrame):
     """Minimalist surface card grouping related configuration options."""
 
-    def __init__(self, title: str, parent=None):
+    def __init__(self, title_key: str, parent=None):
         super().__init__(parent)
+        self.title_key = title_key
+        self.rows: List[SettingRow] = []
         self.setObjectName("SettingCard")
         self.setStyleSheet("""
             QFrame#SettingCard {
@@ -370,15 +434,15 @@ class SettingCard(QFrame):
         self.layout.setSpacing(0)
 
         # Section header label
-        lbl_section = QLabel(title.upper(), self)
-        lbl_section.setStyleSheet("""
+        self.lbl_section = QLabel(tr(title_key).upper() if title_key else "", self)
+        self.lbl_section.setStyleSheet("""
             color: #1DB954;
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.5px;
             padding: 4px 14px 6px 14px;
         """)
-        self.layout.addWidget(lbl_section)
+        self.layout.addWidget(self.lbl_section)
 
     def add_row(self, row: SettingRow):
         if self.layout.count() > 1:
@@ -386,7 +450,14 @@ class SettingCard(QFrame):
             divider.setFixedHeight(1)
             divider.setStyleSheet("background-color: rgba(255, 255, 255, 0.04);")
             self.layout.addWidget(divider)
+        self.rows.append(row)
         self.layout.addWidget(row)
+
+    def retranslate(self):
+        if self.title_key:
+            self.lbl_section.setText(tr(self.title_key).upper())
+        for r in self.rows:
+            r.retranslate()
 
 
 class SettingsDialog(QDialog):
@@ -399,7 +470,8 @@ class SettingsDialog(QDialog):
     def __init__(self, current_config: AppConfig, parent=None):
         super().__init__(parent)
         self.config = current_config
-        self.setWindowTitle("BarTify — Pengaturan")
+        set_language(self.config.general.language)
+        self.setWindowTitle(tr("app_title"))
         self.setFixedSize(500, 620)
         self._init_styles()
         self._init_ui()
@@ -506,68 +578,93 @@ class SettingsDialog(QDialog):
         content_layout.setSpacing(10)
 
         # 1. Preview Card (Uses Canvas Painting for 100% Crisp Typography & Full Descenders)
-        card_preview = SettingCard("Preview", content)
+        card_preview = SettingCard("preview_heading", content)
         self.preview_canvas = TaskbarPreviewWidget(card_preview)
         card_preview.layout.addWidget(self.preview_canvas)
         content_layout.addWidget(card_preview)
 
         # 2. Typography Card
-        card_typo = SettingCard("Tipografi & Skala", content)
+        card_typo = SettingCard("card_typography", content)
 
         self.font_combo = QFontComboBox(self)
         self.font_combo.currentFontChanged.connect(self._update_preview)
-        card_typo.add_row(SettingRow("Jenis Font", "Pilih jenis huruf yang terpasang di Windows", self.font_combo))
+        card_typo.add_row(SettingRow("row_font", "row_font_desc", self.font_combo))
 
         self.size_slider = SliderWithBadge(8, 20, step=1, initial_val=10, unit="pt")
         self.size_slider.value_changed.connect(lambda _: self._update_preview())
-        card_typo.add_row(SettingRow("Ukuran Teks", "Skala keterbacaan lirik di taskbar", self.size_slider))
+        card_typo.add_row(SettingRow("row_size", "row_size_desc", self.size_slider))
 
         self.bold_check = QCheckBox(self)
         self.bold_check.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_check.toggled.connect(self._update_preview)
-        card_typo.add_row(SettingRow("Teks Tebal (Bold)", "Menebalkan font agar lebih kontras", self.bold_check))
+        card_typo.add_row(SettingRow("row_bold", "row_bold_desc", self.bold_check))
 
         content_layout.addWidget(card_typo)
 
         # 3. Colors Card
-        card_colors = SettingCard("Palet Warna", content)
+        card_colors = SettingCard("card_colors", content)
 
         self.main_color_btn = ColorSwatchButton("#FFFFFF", self)
         self.main_color_btn.color_changed.connect(lambda _: self._update_preview())
-        card_colors.add_row(SettingRow("Lirik Utama", "Warna baris yang sedang dinyanyikan", self.main_color_btn))
+        card_colors.add_row(SettingRow("row_color_main", "row_color_main_desc", self.main_color_btn))
 
         self.next_color_btn = ColorSwatchButton("#999999", self)
         self.next_color_btn.color_changed.connect(lambda _: self._update_preview())
-        card_colors.add_row(SettingRow("Baris Berikutnya", "Warna teks pratinjau bait selanjutnya", self.next_color_btn))
+        card_colors.add_row(SettingRow("row_color_next", "row_color_next_desc", self.next_color_btn))
 
         self.progress_color_btn = ColorSwatchButton("#1DB954", self)
         self.progress_color_btn.color_changed.connect(lambda _: self._update_preview())
-        card_colors.add_row(SettingRow("Bilah Karaoke", "Warna progress bar linier di bawah teks", self.progress_color_btn))
+        card_colors.add_row(SettingRow("row_color_bar", "row_color_bar_desc", self.progress_color_btn))
 
         content_layout.addWidget(card_colors)
 
         # 4. Docking & Layout Card
-        card_layout = SettingCard("Tata Letak & Waktu", content)
+        card_layout = SettingCard("card_layout", content)
 
-        self.pos_pills = SegmentedPillGroup([("left", "Kiri"), ("center", "Tengah"), ("right", "Kanan")], "left", self)
-        card_layout.add_row(SettingRow("Posisi Taskbar", "Area berlabuh lirik di taskbar", self.pos_pills))
+        self.pos_pills = SegmentedPillGroup([("left", tr("pos_left")), ("center", tr("pos_center")), ("right", tr("pos_right"))], "left", self)
+        card_layout.add_row(SettingRow("row_position", "row_position_desc", self.pos_pills))
 
         self.width_slider = SliderWithBadge(260, 680, step=20, initial_val=380, unit="px")
-        card_layout.add_row(SettingRow("Lebar Maksimal", "Batas bentang horizontal teks", self.width_slider))
+        card_layout.add_row(SettingRow("row_width", "row_width_desc", self.width_slider))
 
         self.offset_slider = SliderWithBadge(-3.0, 3.0, step=0.1, initial_val=0.0, unit="s", multiplier=10)
-        card_layout.add_row(SettingRow("Sinkronisasi Detik", "Kompensasi waktu cepat/lambat lirik", self.offset_slider))
+        card_layout.add_row(SettingRow("row_offset", "row_offset_desc", self.offset_slider))
 
         content_layout.addWidget(card_layout)
+
+        # 5. System Integration Card
+        card_system = SettingCard("card_system", content)
+
+        self.lang_pills = SegmentedPillGroup([("en", "English"), ("id", "Bahasa Indonesia")], self.config.general.language, self)
+        self.lang_pills.selection_changed.connect(self._on_language_changed)
+        card_system.add_row(SettingRow("row_language", "row_language_desc", self.lang_pills))
+
+        self.autostart_toggle = ToggleSwitch(self.config.general.auto_start_with_spotify, self)
+        card_system.add_row(SettingRow(
+            "row_autostart",
+            "row_autostart_desc",
+            self.autostart_toggle,
+        ))
+
+        self.autohide_toggle = ToggleSwitch(self.config.general.auto_hide_when_idle, self)
+        card_system.add_row(SettingRow(
+            "row_autohide",
+            "row_autohide_desc",
+            self.autohide_toggle,
+        ))
+
+        content_layout.addWidget(card_system)
+
+        self._cards = [card_preview, card_typo, card_colors, card_layout, card_system]
 
         scroll.setWidget(content)
         root_layout.addWidget(scroll)
 
-        # 5. Modern Bottom Action Bar
+        # 6. Modern Bottom Action Bar
         btn_layout = QHBoxLayout()
         btn_layout.setContentsMargins(4, 6, 4, 2)
 
-        self.reset_btn = QPushButton("Reset Default", self)
+        self.reset_btn = QPushButton(tr("btn_reset"), self)
         self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reset_btn.setStyleSheet("""
             QPushButton {
@@ -590,7 +687,7 @@ class SettingsDialog(QDialog):
 
         btn_layout.addStretch()
 
-        self.cancel_btn = QPushButton("Batal", self)
+        self.cancel_btn = QPushButton(tr("btn_cancel"), self)
         self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_btn.setStyleSheet("""
             QPushButton {
@@ -610,7 +707,7 @@ class SettingsDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
 
-        self.save_btn = QPushButton("Simpan Pengaturan", self)
+        self.save_btn = QPushButton(tr("btn_save"), self)
         self.save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_btn.setStyleSheet("""
             QPushButton {
@@ -631,6 +728,23 @@ class SettingsDialog(QDialog):
 
         root_layout.addLayout(btn_layout)
 
+    def _on_language_changed(self, lang_key: str):
+        set_language(lang_key)
+        self._retranslate_ui()
+
+    def _retranslate_ui(self):
+        self.setWindowTitle(tr("app_title"))
+        for card in self._cards:
+            card.retranslate()
+        self.reset_btn.setText(tr("btn_reset"))
+        self.cancel_btn.setText(tr("btn_cancel"))
+        self.save_btn.setText(tr("btn_save"))
+        self.pos_pills.update_labels([
+            ("left", tr("pos_left")),
+            ("center", tr("pos_center")),
+            ("right", tr("pos_right")),
+        ])
+
     def _load_values(self):
         ov = self.config.overlay
         self.font_combo.setCurrentFont(QFont(ov.font_family))
@@ -644,6 +758,12 @@ class SettingsDialog(QDialog):
         self.pos_pills.set_active(ov.position if ov.position in ["left", "center", "right"] else "left")
         self.width_slider.set_value(ov.width)
         self.offset_slider.set_value(ov.manual_offset)
+
+        # System Integration & Language
+        gen = self.config.general
+        self.lang_pills.set_active(gen.language)
+        self.autostart_toggle.setChecked(gen.auto_start_with_spotify)
+        self.autohide_toggle.setChecked(gen.auto_hide_when_idle)
 
     def _update_preview(self):
         font_family = self.font_combo.currentFont().family()
@@ -674,6 +794,11 @@ class SettingsDialog(QDialog):
         self.pos_pills.set_active("left")
         self.width_slider.set_value(default.width)
         self.offset_slider.set_value(default.manual_offset)
+        self.autostart_toggle.setChecked(False)
+        self.autohide_toggle.setChecked(True)
+        self.lang_pills.set_active("en")
+        set_language("en")
+        self._retranslate_ui()
         self._update_preview()
 
     def _save_and_apply(self):
@@ -689,6 +814,9 @@ class SettingsDialog(QDialog):
             manual_offset=self.offset_slider.value(),
         )
         self.config.overlay = new_overlay
+        self.config.general.language = self.lang_pills.active_key()
+        self.config.general.auto_start_with_spotify = self.autostart_toggle.isChecked()
+        self.config.general.auto_hide_when_idle = self.autohide_toggle.isChecked()
         save_config(self.config)
         self.config_saved.emit(self.config)
         self.accept()

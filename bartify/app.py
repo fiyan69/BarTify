@@ -14,11 +14,16 @@ from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .config import AppConfig, load_config, save_config
+from .core.i18n import set_language, tr
 from .core.lrc_parser import ParsedLyrics
 from .core.lyrics_client import LyricsClient
 from .core.media_listener import MediaTrack, WindowsMediaListener
 from .ui.overlay_window import TaskbarOverlayWindow
-from .utils.windows_api import trim_process_memory
+from .utils.windows_api import (
+    is_spotify_running,
+    set_windows_autostart,
+    trim_process_memory,
+)
 
 logger = logging.getLogger("BarTify.App")
 
@@ -60,9 +65,11 @@ class BarTifyApp(QObject):
 
     lyrics_loaded_signal = pyqtSignal(object)  # Emits ParsedLyrics or None
 
-    def __init__(self):
+    def __init__(self, start_minimized: bool = False):
         super().__init__()
         self.config = load_config()
+        set_language(self.config.general.language)
+        self.start_minimized = start_minimized
         self.media_listener = WindowsMediaListener(target_app_keyword="spotify")
         self.lyrics_client = LyricsClient()
         self.overlay = TaskbarOverlayWindow()
@@ -132,31 +139,31 @@ class BarTifyApp(QObject):
             }
         """)
 
-        toggle_act = QAction("Toggle Overlay Visibility", self)
+        toggle_act = QAction(tr("tray_toggle"), self)
         toggle_act.triggered.connect(lambda: self.overlay.setVisible(not self.overlay.isVisible()))
         tray_menu.addAction(toggle_act)
 
-        settings_act = QAction("⚙️ Pengaturan Tampilan & Font...", self)
+        settings_act = QAction(tr("tray_settings"), self)
         settings_act.triggered.connect(self._open_settings_dialog)
         tray_menu.addAction(settings_act)
 
         tray_menu.addSeparator()
 
-        snap_left_act = QAction("📌 Dock to Left (Default)", self)
+        snap_left_act = QAction(f"📌 {tr('pos_left')}", self)
         snap_left_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("left"))
         tray_menu.addAction(snap_left_act)
 
-        snap_center_act = QAction("📌 Dock to Center", self)
+        snap_center_act = QAction(f"📌 {tr('pos_center')}", self)
         snap_center_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("center"))
         tray_menu.addAction(snap_center_act)
 
-        snap_right_act = QAction("📌 Dock to Right", self)
+        snap_right_act = QAction(f"📌 {tr('pos_right')}", self)
         snap_right_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("right"))
         tray_menu.addAction(snap_right_act)
 
         tray_menu.addSeparator()
 
-        quit_act = QAction("Quit BarTify", self)
+        quit_act = QAction(tr("tray_exit"), self)
         quit_act.triggered.connect(self._quit_app)
         tray_menu.addAction(quit_act)
 
@@ -174,13 +181,23 @@ class BarTifyApp(QObject):
     def _on_config_saved(self, new_config: AppConfig):
         """Applies newly saved settings immediately to the active overlay."""
         self.config = new_config
+        set_language(self.config.general.language)
         self.manual_offset = new_config.overlay.manual_offset
         self.overlay.apply_config(self.config)
-        print("[BarTify] [✓] Pengaturan tampilan berhasil diperbarui!")
+        self._init_tray_icon()
+        set_windows_autostart(self.config.general.auto_start_with_spotify)
+        print("[BarTify] [✓] Settings updated successfully!")
 
     def start(self):
         """Starts the application timers, worker thread, and displays the overlay."""
-        self.overlay.show()
+        should_hide = self.start_minimized or (
+            self.config.general.auto_hide_when_idle and not is_spotify_running()
+        )
+        if not should_hide:
+            self.overlay.show()
+        else:
+            self.overlay.hide()
+
         self.render_timer.start(50)
         self.poller_thread.start()
         # Initial memory trim after GUI structures have loaded
@@ -216,7 +233,7 @@ class BarTifyApp(QObject):
 
         # Main-thread safe UI update
         self.overlay.update_lyrics_display(
-            f"🔍 Mencari lirik: {track.title}...",
+            tr("status_searching", title=track.title),
             track.artist,
             0.0,
         )
@@ -241,7 +258,7 @@ class BarTifyApp(QObject):
             if self.current_track:
                 self.overlay.update_lyrics_display(
                     f"🎵 {self.current_track.title}",
-                    f"{self.current_track.artist} (No synced lyrics found)",
+                    f"{self.current_track.artist} {tr('status_no_lyrics')}",
                     0.0,
                 )
         self._fetching_track_id = None
@@ -250,16 +267,26 @@ class BarTifyApp(QObject):
 
     def _render_tick(self):
         """Called every 50ms to update the current line and progress bar."""
+        spotify_running = is_spotify_running()
+        is_playing = bool(self.current_track and self.current_track.is_playing)
+
+        # Auto-hide overlay if idle or Spotify closed
+        if self.config.general.auto_hide_when_idle:
+            if not spotify_running or not is_playing:
+                if self.overlay.isVisible():
+                    self.overlay.hide()
+                return
+
         # Continuously keep overlay visible and atop Windows taskbar
         if not self.overlay.isVisible():
             self.overlay.show()
         self.overlay.raise_()
 
         if not self.current_track:
-            self.overlay.update_lyrics_display("🎵 BarTify - Menunggu Spotify", "", 0.0)
+            self.overlay.update_lyrics_display(tr("status_waiting"), "", 0.0)
             return
 
-        if not self.current_track.is_playing:
+        if not is_playing:
             return
 
         if not self.current_lyrics or self.current_lyrics.is_empty():

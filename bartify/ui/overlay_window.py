@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..config import AppConfig
+from ..core.i18n import tr
 from ..utils.windows_api import (
     get_taskbar_rect,
     set_click_through,
@@ -325,14 +326,14 @@ class TaskbarOverlayWindow(QWidget):
             }
         """)
 
-        settings_act = menu.addAction("⚙️ Pengaturan")
+        settings_act = menu.addAction(tr("menu_settings"))
         settings_act.triggered.connect(self.settings_requested.emit)
 
-        reload_act = menu.addAction("🔄 Reset Lyric")
+        reload_act = menu.addAction(tr("menu_reset"))
         reload_act.triggered.connect(self.reload_requested.emit)
 
         menu.addSeparator()
-        quit_act = menu.addAction("❌ Exit")
+        quit_act = menu.addAction(tr("menu_exit"))
         quit_act.triggered.connect(QApplication.instance().quit)
 
         menu.exec(event.globalPos())
