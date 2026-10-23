@@ -85,6 +85,12 @@ def make_overlay_capture_safe(hwnd: int):
         # Set Display Affinity to WDA_NONE (0) to ensure screen capture tools include it
         user32.SetWindowDisplayAffinity(hwnd, 0)
 
+        # Strip WS_EX_APPWINDOW to avoid taskbar icon clutter
+        GWL_EXSTYLE = -20
+        WS_EX_APPWINDOW = 0x00040000
+        style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_APPWINDOW))
+
         # Ensure TopMost and NoActivate flags
         HWND_TOPMOST = -1
         SWP_NOMOVE = 0x0002

@@ -4,6 +4,7 @@ Reads playback metadata and timeline directly from Windows WinRT API.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import time
 from typing import Optional
 
@@ -94,7 +95,22 @@ class WindowsMediaListener:
 
             if timeline:
                 if timeline.position is not None:
-                    position_sec = timeline.position.total_seconds()
+                    base_sec = timeline.position.total_seconds()
+                    # WinRT timeline position can be several seconds older than current time.
+                    # Use last_updated_time to calculate true realtime position without lag.
+                    if timeline.last_updated_time is not None and is_playing:
+                        try:
+                            now_utc = datetime.now(timezone.utc)
+                            lag = (now_utc - timeline.last_updated_time).total_seconds()
+                            if 0 <= lag < 15:
+                                position_sec = base_sec + lag
+                            else:
+                                position_sec = base_sec
+                        except Exception:
+                            position_sec = base_sec
+                    else:
+                        position_sec = base_sec
+
                 if timeline.end_time is not None:
                     duration_sec = timeline.end_time.total_seconds()
 

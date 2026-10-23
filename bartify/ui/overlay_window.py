@@ -56,8 +56,7 @@ class TaskbarOverlayWindow(QWidget):
     reload_requested = pyqtSignal()
 
     def __init__(self, click_through: bool = False):
-        self._dummy_parent = QWidget()  # Invisible parent prevents taskbar button
-        super().__init__(self._dummy_parent)
+        super().__init__(None)
         self._click_through = click_through
         self._current_progress = 0.0
 
@@ -69,12 +68,17 @@ class TaskbarOverlayWindow(QWidget):
     def _init_window_flags(self):
         """Sets frameless and top-most flags without ToolWindow so Snipping Tool captures it."""
         self.setWindowFlags(
-            Qt.WindowType.Window
-            | Qt.WindowType.FramelessWindowHint
+            Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+
+    def changeEvent(self, event):
+        """Prevents the overlay from remaining minimized during system state changes."""
+        if event.type() == event.Type.WindowStateChange and self.isMinimized():
+            self.showNormal()
+        super().changeEvent(event)
 
     def _init_ui(self):
         root_layout = QVBoxLayout(self)

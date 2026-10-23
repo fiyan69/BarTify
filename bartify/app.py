@@ -216,8 +216,13 @@ class BarTifyApp(QObject):
 
     def _render_tick(self):
         """Called every 50ms to update the current line and progress bar."""
+        # Continuously keep overlay visible and atop Windows taskbar
+        if not self.overlay.isVisible():
+            self.overlay.show()
+        self.overlay.raise_()
+
         if not self.current_track:
-            self.overlay.update_lyrics_display("🎵 BarTify - Waiting for Spotify", "", 0.0)
+            self.overlay.update_lyrics_display("🎵 BarTify - Menunggu Spotify", "", 0.0)
             return
 
         if not self.current_track.is_playing:
