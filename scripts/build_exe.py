@@ -8,6 +8,10 @@ import os
 import subprocess
 import sys
 
+# Ensure execution always roots in the repository root directory
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+os.chdir(ROOT_DIR)
+
 
 def build():
     print("[BarTify Build] Starting PyInstaller build...")
@@ -23,6 +27,8 @@ def build():
         except Exception:
             pass
 
+    icon_path = os.path.join("assets", "icon.ico")
+
     args = [
         sys.executable,
         "-m",
@@ -31,7 +37,7 @@ def build():
         "--onefile",
         "--noconsole",
         "--clean",
-        "--icon=assets/icon.ico",
+        f"--icon={icon_path}",
         "--hidden-import=winrt",
         "--hidden-import=winrt.windows.media.control",
         "--hidden-import=winrt.windows.foundation",
@@ -48,7 +54,7 @@ def build():
     if result.returncode == 0:
         exe_path = os.path.abspath("dist/BarTify.exe")
         size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-        print(f"[BarTify Build] [✓] Build sukses!")
+        print("[BarTify Build] [✓] Build sukses!")
         print(f"[BarTify Build] [✓] Lokasi: {exe_path}")
         print(f"[BarTify Build] [✓] Ukuran: {size_mb:.2f} MB")
     else:

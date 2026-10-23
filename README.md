@@ -95,9 +95,10 @@ BarTify/
 │   ├── __init__.py
 │   ├── app.py                    # Main controller, background poller, and system tray
 │   └── config.py                 # Central JSON configuration persistence
+├── scripts/
+│   └── build_exe.py              # Single-file PyInstaller packaging automation
 ├── tests/
 │   └── test_lrc_parser.py        # Automated unit test suite
-├── build_exe.py                  # Single-file PyInstaller packaging automation
 ├── requirements.txt              # Production dependencies
 ├── LICENSE                       # MIT License
 ├── README.md                     # Documentation
@@ -108,14 +109,14 @@ BarTify/
 
 ## 🛠️ Installation & Usage
 
-### Option 1: Standalone Portable Executable (No Python Required)
-You can build a standalone, single-file Windows executable:
-```bash
-python build_exe.py
-```
-This produces `dist/BarTify.exe`. Simply double-click `BarTify.exe` to run it anywhere without requiring Python, VS Code, or terminal dependencies.
+### Option 1: Direct Download (Recommended for Everyone)
+No Python, Git, or terminal required:
+1. Download the latest standalone **`BarTify.exe`** from **[GitHub Releases](https://github.com/fiyan69/BarTify/releases/latest)**.
+2. Double-click `BarTify.exe` to run.
+3. Open Spotify and play any song—lyrics appear immediately on your Windows taskbar!
+4. Right-click the lyrics or the green Spotify note icon in your system tray to configure settings (fonts, colors, alignment, auto-start, or language).
 
-### Option 2: Running from Source
+### Option 2: Running from Source (For Developers)
 #### Prerequisites
 - **OS**: Windows 10 or Windows 11
 - **Python**: Python 3.12+
@@ -136,6 +137,13 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
+
+### Option 3: Building Standalone Executable
+If you modify the source code and wish to re-package your own standalone binary:
+```bash
+python scripts/build_exe.py
+```
+This automatically produces `dist/BarTify.exe`.
 
 ---
 
