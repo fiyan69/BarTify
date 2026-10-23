@@ -74,25 +74,24 @@ class TaskbarOverlayWindow(QWidget):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # Translucent styled container frame
+        # Seamless container frame blending directly into the Windows taskbar
         self.container = QFrame(self)
         self.container.setObjectName("Container")
         self.container.setStyleSheet("""
             QFrame#Container {
-                background-color: rgba(20, 20, 20, 0.88);
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                border-radius: 12px;
+                background-color: transparent;
+                border: none;
             }
         """)
 
         layout = QVBoxLayout(self.container)
-        layout.setContentsMargins(14, 5, 14, 5)
-        layout.setSpacing(2)
+        layout.setContentsMargins(12, 4, 12, 2)
+        layout.setSpacing(1)
 
-        # Main active lyric label
+        # Main active lyric label (rendered directly on taskbar)
         self.lyric_label = QLabel("🎵 BarTify Ready", self.container)
         self.lyric_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = QFont("Segoe UI", 10, QFont.Weight.DemiBold)
+        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
         self.lyric_label.setFont(font)
         self.lyric_label.setStyleSheet("""
             QLabel {
@@ -108,13 +107,14 @@ class TaskbarOverlayWindow(QWidget):
         self.next_label.setFont(next_font)
         self.next_label.setStyleSheet("""
             QLabel {
-                color: rgba(255, 255, 255, 0.55);
+                color: rgba(255, 255, 255, 0.60);
                 background-color: transparent;
             }
         """)
 
-        # Progress bar
+        # 2px sleek progress bar at the bottom edge of taskbar
         self.progress_bar = KaraokeProgressBar(self.container)
+        self.progress_bar.setFixedHeight(2)
 
         layout.addWidget(self.lyric_label)
         layout.addWidget(self.next_label)
@@ -122,10 +122,10 @@ class TaskbarOverlayWindow(QWidget):
 
         root_layout.addWidget(self.container)
 
-    def reposition_to_taskbar(self, width: int = 560, height: int = 48):
+    def reposition_to_taskbar(self, width: int = 520, height: int = 48):
         """
-        Positions the overlay cleanly above or on the taskbar using Qt logical coordinates.
-        Supports both auto-hide and standard Windows taskbars.
+        Positions the overlay directly ON the Windows taskbar surface
+        using DPR-scaled Win32 coordinates.
         """
         screen = QApplication.primaryScreen()
         if not screen:
@@ -134,15 +134,21 @@ class TaskbarOverlayWindow(QWidget):
         s_geo = screen.geometry()
         sw = s_geo.width()
         sh = s_geo.height()
+        dpr = screen.devicePixelRatio()
+
+        tb = get_taskbar_rect()
+        if tb:
+            # Convert physical pixels from Win32 to Qt logical units
+            logical_tb_y = int(tb[1] / dpr)
+            logical_tb_h = int(tb[3] / dpr)
+            overlay_h = min(height, logical_tb_h)
+            overlay_y = logical_tb_y + (logical_tb_h - overlay_h) // 2
+        else:
+            overlay_h = height
+            overlay_y = sh - 48
 
         overlay_w = min(width, sw - 40)
-        overlay_h = height
         overlay_x = (sw - overlay_w) // 2
-
-        if is_taskbar_autohide():
-            overlay_y = sh - overlay_h - 14
-        else:
-            overlay_y = sh - 48 - overlay_h - 6
 
         self.setGeometry(overlay_x, overlay_y, overlay_w, overlay_h)
 
@@ -177,7 +183,7 @@ class TaskbarOverlayWindow(QWidget):
     def enterEvent(self, event):
         """Auto-fade on hover so user can easily interact with taskbar underneath."""
         if not self._click_through:
-            self.setWindowOpacity(0.2)
+            self.setWindowOpacity(0.05)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
