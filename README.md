@@ -150,7 +150,3 @@ python -m unittest discover tests
 ## 📄 License
 
 This project is open-source and available under the [MIT License](LICENSE).
-
----
-
-*Authored with ❤️ by [fiyantsu](https://github.com/fiyan69)*
