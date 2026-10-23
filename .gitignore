@@ -43,6 +43,9 @@ env/
 *.log
 *.sqlite3
 
+# Local configuration
+config.json
+
 # Windows thumbnail cache
 Thumbs.db
 ehthumbs.db
