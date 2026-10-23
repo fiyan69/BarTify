@@ -6,10 +6,11 @@ Coordinates media listening, lyric fetching (in background thread), and UI overl
 import asyncio
 import logging
 import threading
+import time
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QIcon, QPixmap, QColor, QPainter
+from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .core.lrc_parser import ParsedLyrics
@@ -20,11 +21,42 @@ from .ui.overlay_window import TaskbarOverlayWindow
 logger = logging.getLogger("BarTify.App")
 
 
+class MediaPollerThread(QThread):
+    """
+    Dedicated background worker thread for querying Windows WinRT GSMTC.
+    Emits track snapshots safely across thread boundaries via Qt Signals.
+    """
+    track_updated = pyqtSignal(object)
+
+    def __init__(self, media_listener: WindowsMediaListener):
+        super().__init__()
+        self.media_listener = media_listener
+        self._running = True
+
+    def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        while self._running:
+            try:
+                track = loop.run_until_complete(self.media_listener.get_current_track())
+                self.track_updated.emit(track)
+            except Exception as e:
+                logger.debug(f"Media polling worker exception: {e}")
+
+            time.sleep(0.7)
+
+        loop.close()
+
+    def stop(self):
+        self._running = False
+        self.wait(1000)
+
+
 class BarTifyApp(QObject):
     """Central controller managing BarTify's lifecycle, threads, and UI synchronization."""
 
     lyrics_loaded_signal = pyqtSignal(object)  # Emits ParsedLyrics or None
-    track_changed_signal = pyqtSignal(object)  # Emits MediaTrack
 
     def __init__(self):
         super().__init__()
@@ -37,6 +69,10 @@ class BarTifyApp(QObject):
         self.manual_offset: float = 0.0
         self._fetching_track_id: Optional[str] = None
 
+        # Dedicated WinRT Poller Thread
+        self.poller_thread = MediaPollerThread(self.media_listener)
+        self.poller_thread.track_updated.connect(self._on_track_polled)
+
         # Setup Signals
         self.lyrics_loaded_signal.connect(self._on_lyrics_loaded)
         self.overlay.offset_changed.connect(self._adjust_offset)
@@ -46,10 +82,6 @@ class BarTifyApp(QObject):
         # 1. Fast UI Render Timer (every 50ms = 20 FPS for smooth progress bar and line updates)
         self.render_timer = QTimer(self)
         self.render_timer.timeout.connect(self._render_tick)
-
-        # 2. Media Poll Timer (every 1000ms to check WinRT GSMTC state)
-        self.poll_timer = QTimer(self)
-        self.poll_timer.timeout.connect(self._poll_media_tick)
 
         self._init_tray_icon()
 
@@ -111,43 +143,35 @@ class BarTifyApp(QObject):
         tray_menu.addSeparator()
 
         quit_act = QAction("Quit BarTify", self)
-        quit_act.triggered.connect(QApplication.instance().quit)
+        quit_act.triggered.connect(self._quit_app)
         tray_menu.addAction(quit_act)
 
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.show()
 
     def start(self):
-        """Starts the application timers and displays the overlay."""
+        """Starts the application timers, worker thread, and displays the overlay."""
         self.overlay.show()
         self.render_timer.start(50)
-        self.poll_timer.start(1000)
-        self._poll_media_tick()
+        self.poller_thread.start()
 
-    def _poll_media_tick(self):
-        """Asynchronously queries the active media session in a worker thread."""
-        def worker():
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                track = loop.run_until_complete(self.media_listener.get_current_track())
-                loop.close()
+    def _quit_app(self):
+        self.poller_thread.stop()
+        QApplication.instance().quit()
 
-                if track:
-                    track_key = f"{track.artist} - {track.title}"
-                    old_key = f"{self.current_track.artist} - {self.current_track.title}" if self.current_track else None
+    def _on_track_polled(self, track: Optional[MediaTrack]):
+        """Slot running on the Main Thread handling media state changes."""
+        if track:
+            track_key = f"{track.artist} - {track.title}"
+            old_key = f"{self.current_track.artist} - {self.current_track.title}" if self.current_track else None
 
-                    self.current_track = track
+            self.current_track = track
 
-                    if track_key != old_key:
-                        print(f"[Spotify] 🎵 Lagu terdeteksi: {track.artist} - {track.title}")
-                        self._trigger_lyrics_fetch(track)
-                else:
-                    self.current_track = None
-            except Exception as e:
-                logger.debug(f"Media polling error: {e}")
-
-        threading.Thread(target=worker, daemon=True).start()
+            if track_key != old_key:
+                print(f"[Spotify] 🎵 Lagu terdeteksi: {track.artist} - {track.title}")
+                self._trigger_lyrics_fetch(track)
+        else:
+            self.current_track = None
 
     def _trigger_lyrics_fetch(self, track: MediaTrack):
         """Dispatches lyrics retrieval to a daemon thread to avoid blocking the GUI."""
@@ -157,9 +181,11 @@ class BarTifyApp(QObject):
 
         self._fetching_track_id = track_id
         self.current_lyrics = None
+
+        # Main-thread safe UI update
         self.overlay.update_lyrics_display(
-            f"🔍 Searching lyrics for {track.title}...",
-            f"Artist: {track.artist}",
+            f"🔍 Mencari lirik: {track.title}...",
+            track.artist,
             0.0,
         )
 

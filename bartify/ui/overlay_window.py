@@ -186,17 +186,6 @@ class TaskbarOverlayWindow(QWidget):
         self._click_through = enable
         set_click_through(int(self.winId()), enable)
 
-    def enterEvent(self, event):
-        """Auto-fade on hover so user can easily interact with taskbar underneath."""
-        if not self._click_through:
-            self.setWindowOpacity(0.05)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        """Restore full opacity when mouse leaves."""
-        self.setWindowOpacity(1.0)
-        super().leaveEvent(event)
-
     def contextMenuEvent(self, event):
         """Context menu for quick controls."""
         if self._click_through:
