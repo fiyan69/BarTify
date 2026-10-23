@@ -94,9 +94,19 @@ class BarTifyApp(QObject):
         toggle_act.triggered.connect(lambda: self.overlay.setVisible(not self.overlay.isVisible()))
         tray_menu.addAction(toggle_act)
 
-        recenter_act = QAction("Recenter on Taskbar", self)
-        recenter_act.triggered.connect(self.overlay.reposition_to_taskbar)
-        tray_menu.addAction(recenter_act)
+        tray_menu.addSeparator()
+
+        snap_left_act = QAction("📌 Dock to Left (Default)", self)
+        snap_left_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("left"))
+        tray_menu.addAction(snap_left_act)
+
+        snap_center_act = QAction("📌 Dock to Center", self)
+        snap_center_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("center"))
+        tray_menu.addAction(snap_center_act)
+
+        snap_right_act = QAction("📌 Dock to Right", self)
+        snap_right_act.triggered.connect(lambda: self.overlay.reposition_to_taskbar("right"))
+        tray_menu.addAction(snap_right_act)
 
         tray_menu.addSeparator()
 

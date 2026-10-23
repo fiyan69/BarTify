@@ -85,12 +85,12 @@ class TaskbarOverlayWindow(QWidget):
         """)
 
         layout = QVBoxLayout(self.container)
-        layout.setContentsMargins(12, 4, 12, 2)
+        layout.setContentsMargins(8, 4, 8, 2)
         layout.setSpacing(1)
 
-        # Main active lyric label (rendered directly on taskbar)
+        # Main active lyric label (rendered directly on taskbar, left-aligned)
         self.lyric_label = QLabel("🎵 BarTify Ready", self.container)
-        self.lyric_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lyric_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         font = QFont("Segoe UI", 10, QFont.Weight.Bold)
         self.lyric_label.setFont(font)
         self.lyric_label.setStyleSheet("""
@@ -102,7 +102,7 @@ class TaskbarOverlayWindow(QWidget):
 
         # Next line preview label
         self.next_label = QLabel("", self.container)
-        self.next_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.next_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         next_font = QFont("Segoe UI", 8, QFont.Weight.Normal)
         self.next_label.setFont(next_font)
         self.next_label.setStyleSheet("""
@@ -122,10 +122,10 @@ class TaskbarOverlayWindow(QWidget):
 
         root_layout.addWidget(self.container)
 
-    def reposition_to_taskbar(self, width: int = 520, height: int = 48):
+    def reposition_to_taskbar(self, position: str = "left", width: int = 380, height: int = 48):
         """
-        Positions the overlay directly ON the Windows taskbar surface
-        using DPR-scaled Win32 coordinates.
+        Positions the overlay directly ON the Windows taskbar surface.
+        Defaults to 'left' (x = 16) to avoid colliding with centered Windows 11 icons.
         """
         screen = QApplication.primaryScreen()
         if not screen:
@@ -148,7 +148,13 @@ class TaskbarOverlayWindow(QWidget):
             overlay_y = sh - 48
 
         overlay_w = min(width, sw - 40)
-        overlay_x = (sw - overlay_w) // 2
+
+        if position == "left":
+            overlay_x = 16
+        elif position == "right":
+            overlay_x = sw - overlay_w - 240  # Just before system tray
+        else:  # "center"
+            overlay_x = (sw - overlay_w) // 2
 
         self.setGeometry(overlay_x, overlay_y, overlay_w, overlay_h)
 
