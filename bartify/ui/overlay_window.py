@@ -16,7 +16,12 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
 )
 
-from ..utils.windows_api import get_taskbar_rect, set_click_through, is_taskbar_autohide
+from ..utils.windows_api import (
+    get_taskbar_rect,
+    set_click_through,
+    is_taskbar_autohide,
+    make_overlay_capture_safe,
+)
 
 
 class KaraokeProgressBar(QProgressBar):
@@ -51,20 +56,22 @@ class TaskbarOverlayWindow(QWidget):
     reload_requested = pyqtSignal()
 
     def __init__(self, click_through: bool = False):
-        super().__init__()
+        self._dummy_parent = QWidget()  # Invisible parent prevents taskbar button
+        super().__init__(self._dummy_parent)
         self._click_through = click_through
         self._current_progress = 0.0
 
         self._init_window_flags()
         self._init_ui()
         self.reposition_to_taskbar()
+        make_overlay_capture_safe(int(self.winId()))
 
     def _init_window_flags(self):
-        """Sets frameless, tool-window (no alt-tab clutter), and top-most flags."""
+        """Sets frameless and top-most flags without ToolWindow so Snipping Tool captures it."""
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)

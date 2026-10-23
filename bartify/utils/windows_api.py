@@ -74,3 +74,31 @@ def set_click_through(hwnd: int, enable: bool = True) -> bool:
         return True
     except Exception:
         return False
+
+
+def make_overlay_capture_safe(hwnd: int):
+    """
+    Ensures the window is capture-safe (visible to Snipping Tool / screen capture)
+    and stays atop without being filtered as an ephemeral tool window.
+    """
+    try:
+        # Set Display Affinity to WDA_NONE (0) to ensure screen capture tools include it
+        user32.SetWindowDisplayAffinity(hwnd, 0)
+
+        # Ensure TopMost and NoActivate flags
+        HWND_TOPMOST = -1
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_NOACTIVATE = 0x0010
+        SWP_SHOWWINDOW = 0x0040
+        user32.SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        )
+    except Exception:
+        pass
