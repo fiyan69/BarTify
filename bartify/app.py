@@ -200,6 +200,7 @@ class BarTifyApp(QObject):
 
             if track_key != old_key:
                 print(f"[Spotify] 🎵 Lagu terdeteksi: {track.artist} - {track.title}")
+                self.manual_offset = self.config.overlay.manual_offset
                 self._trigger_lyrics_fetch(track)
         else:
             self.current_track = None
@@ -279,6 +280,7 @@ class BarTifyApp(QObject):
 
     def _adjust_offset(self, delta: float):
         self.manual_offset += delta
+        print(f"[BarTify] [⏱] Offset lirik disesuaikan: {self.manual_offset:+.1f}s")
 
     def _force_reload_lyrics(self):
         if self.current_track:

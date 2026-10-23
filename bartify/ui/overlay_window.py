@@ -302,34 +302,37 @@ class TaskbarOverlayWindow(QWidget):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #1e1e1e;
+                background-color: #16161A;
                 color: #ffffff;
-                border: 1px solid #333333;
-                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
                 padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 14px;
+                border-radius: 5px;
+                font-size: 12px;
             }
             QMenu::item:selected {
                 background-color: #1DB954;
-                border-radius: 4px;
+                color: #000000;
+                font-weight: 600;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: rgba(255, 255, 255, 0.08);
+                margin: 4px 6px;
             }
         """)
 
-        settings_act = menu.addAction("⚙️ Pengaturan Tampilan & Font...")
+        settings_act = menu.addAction("⚙️ Pengaturan")
         settings_act.triggered.connect(self.settings_requested.emit)
 
-        menu.addSeparator()
-
-        reload_act = menu.addAction("🔄 Reload Lyrics")
+        reload_act = menu.addAction("🔄 Reset Lyric")
         reload_act.triggered.connect(self.reload_requested.emit)
 
-        offset_plus = menu.addAction("⏩ Offset +0.5s")
-        offset_plus.triggered.connect(lambda: self.offset_changed.emit(0.5))
-
-        offset_minus = menu.addAction("⏪ Offset -0.5s")
-        offset_minus.triggered.connect(lambda: self.offset_changed.emit(-0.5))
-
         menu.addSeparator()
-        quit_act = menu.addAction("❌ Exit BarTify")
+        quit_act = menu.addAction("❌ Exit")
         quit_act.triggered.connect(QApplication.instance().quit)
 
         menu.exec(event.globalPos())
