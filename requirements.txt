@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+winrt-Windows.Media.Control>=3.2.0
+winrt-Windows.Storage.Streams>=3.2.0
+requests>=2.31.0
